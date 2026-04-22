@@ -1,0 +1,16 @@
+{
+  "name": "when-train",
+  "version": "1.0.0",
+  "private": true,
+  "description": "whenTrain? — real-time NYC subway arrivals",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=packages/backend",
+    "dev:frontend": "npm run dev --workspace=packages/frontend",
+    "build": "npm run build --workspaces",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  }
+}
