@@ -5,3 +5,4 @@ dist/
 .DS_Store
 packages/frontend/dist/
 packages/backend/dist/
+.claude/
