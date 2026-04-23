@@ -6,6 +6,7 @@ import "./arrival-card.js";
 @customElement("station-section")
 export class StationSection extends LitElement {
   @property({ type: Object }) station!: StationResult;
+  @property() mode: "train" | "bus" = "train";
 
   static styles = css`
     :host { display: block; }
@@ -48,10 +49,12 @@ export class StationSection extends LitElement {
         <arrival-card
           .arrivals=${this.station.northbound.arrivals}
           direction="N"
+          mode=${this.mode}
         ></arrival-card>
         <arrival-card
           .arrivals=${this.station.southbound.arrivals}
           direction="S"
+          mode=${this.mode}
         ></arrival-card>
       </div>
     `;

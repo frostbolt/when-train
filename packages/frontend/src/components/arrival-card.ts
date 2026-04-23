@@ -16,15 +16,27 @@ const ROUTE_COLORS: Record<string, string> = {
 };
 const LIGHT_ROUTES = new Set(["N", "Q", "R", "W", "G", "L"]);
 
-const EMPTY_MSGS: Record<"N" | "S", string> = {
+function busRouteColor(routeId: string): string {
+  const id = routeId.toUpperCase();
+  if (id.endsWith("+") || id.includes("SBS")) return "#0039A6"; // SBS – blue
+  if (/^(BM|QM|BXM|X)\d/.test(id)) return "#EE352E";           // express – red
+  return "#00933C";                                              // local – green
+}
+
+const TRAIN_EMPTY_MSGS: Record<"N" | "S", string> = {
   N: "🌚 Nothing heading up",
   S: "🦗 No trains south",
+};
+const BUS_EMPTY_MSGS: Record<"N" | "S", string> = {
+  N: "🚌 No buses this way",
+  S: "🚌 No buses this way",
 };
 
 @customElement("arrival-card")
 export class ArrivalCard extends LitElement {
   @property({ type: Array }) arrivals: ArrivalTime[] = [];
   @property() direction: "N" | "S" = "N";
+  @property() mode: "train" | "bus" = "train";
 
   static styles = css`
     :host {
@@ -104,6 +116,9 @@ export class ArrivalCard extends LitElement {
   private get routeId(): string { return this.next?.routeId ?? ""; }
 
   private get bulletStyle(): string {
+    if (this.mode === "bus") {
+      return `background:${busRouteColor(this.routeId)};color:#fff`;
+    }
     const bg = ROUTE_COLORS[this.routeId] ?? "#808183";
     const fg = LIGHT_ROUTES.has(this.routeId) ? "#000" : "#fff";
     return `background:${bg};color:${fg}`;
@@ -130,13 +145,14 @@ export class ArrivalCard extends LitElement {
 
   render() {
     const empty = !this.next;
+    const emptyMsgs = this.mode === "bus" ? BUS_EMPTY_MSGS : TRAIN_EMPTY_MSGS;
     return html`
       <div class="bullet ${empty ? "empty" : ""}" style=${empty ? "" : this.bulletStyle}>
         ${empty ? "?" : this.bulletLabel}
       </div>
       <div class="info">
         ${empty
-          ? html`<div class="time empty">${EMPTY_MSGS[this.direction]}</div>`
+          ? html`<div class="time empty">${emptyMsgs[this.direction]}</div>`
           : html`
               <div class="dest">${this.headsign}</div>
               <div class="time ${this.next?.urgent ? "urgent" : ""}">${this.nextLabel}</div>
