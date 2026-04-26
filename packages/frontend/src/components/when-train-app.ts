@@ -5,6 +5,9 @@ import { fetchArrivals } from "../api.js";
 import "./station-section.js";
 
 const REFRESH_SECS = 30;
+const FEATURE_BUSES = import.meta.env.VITE_FEATURE_BUSES === "true";
+
+type Tab = "trains" | "buses";
 
 @customElement("when-train-app")
 export class WhenTrainApp extends LitElement {
@@ -14,6 +17,7 @@ export class WhenTrainApp extends LitElement {
   @state() private countdown = REFRESH_SECS;
   @state() private updatedAt = "";
   @state() private needsLocation = false;
+  @state() private activeTab: Tab = "trains";
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -67,6 +71,30 @@ export class WhenTrainApp extends LitElement {
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50%       { opacity: 0.25; }
+    }
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      background: #1c1c1e;
+      border-radius: 10px;
+      padding: 3px;
+    }
+    .tab {
+      flex: 1;
+      padding: 7px 0;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: #6e6e73;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tab.active {
+      background: #2c2c2e;
+      color: #f5f5f5;
     }
   `;
 
@@ -183,9 +211,28 @@ export class WhenTrainApp extends LitElement {
     });
   }
 
+  private renderTabBar() {
+    return html`
+      <div class="tab-bar">
+        <button
+          class="tab ${this.activeTab === "trains" ? "active" : ""}"
+          @click=${() => { this.activeTab = "trains"; }}
+        >Trains</button>
+        <button
+          class="tab ${this.activeTab === "buses" ? "active" : ""}"
+          @click=${() => { this.activeTab = "buses"; }}
+        >Buses</button>
+      </div>
+    `;
+  }
+
+  private renderBuses() {
+    return html`<div class="center">🚌 Bus arrivals coming soon</div>`;
+  }
+
   render() {
     if (this.loading) {
-      return html`<div class="center">Locating\u2026</div>`;
+      return html`<div class="center">Locating…</div>`;
     }
     if (this.needsLocation) {
       return html`<div class="center">📍 Share your location to see nearby trains</div>`;
@@ -196,13 +243,18 @@ export class WhenTrainApp extends LitElement {
     if (!this.data) return html``;
 
     return html`
-      ${this.data.stations.map(
-        (s) => html`<station-section .station=${s}></station-section>`
-      )}
-      <div class="footer">
-        <span><span class="dot"></span>${this.updatedAt}</span>
-        <span>↻ ${this.countdown}s</span>
-      </div>
+      ${FEATURE_BUSES ? this.renderTabBar() : ""}
+      ${FEATURE_BUSES && this.activeTab === "buses"
+        ? this.renderBuses()
+        : html`
+            ${this.data.stations.map(
+              (s) => html`<station-section .station=${s}></station-section>`
+            )}
+            <div class="footer">
+              <span><span class="dot"></span>${this.updatedAt}</span>
+              <span>↻ ${this.countdown}s</span>
+            </div>
+          `}
     `;
   }
 }
