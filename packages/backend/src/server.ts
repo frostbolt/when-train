@@ -14,29 +14,82 @@ function buildRtf(station: StationResult): string {
   const esc = (s: string) =>
     s.replace(/\\/g, "\\\\").replace(/\{/g, "\\{").replace(/\}/g, "\\}");
 
-  const allArrivals = [
-    ...station.northbound.arrivals,
-    ...station.southbound.arrivals,
-  ].sort((a, b) => a.minutes - b.minutes);
+  // Group arrivals by route + headsign so each row is a single destination.
+  type Group = { routeId: string; headsign: string; minutes: number[] };
+  const groups = new Map<string, Group>();
+  const collect = (
+    arrivals: { routeId: string; headsign: string; minutes: number }[],
+    fallback: string,
+  ) => {
+    for (const a of arrivals) {
+      const headsign = a.headsign || fallback;
+      const key = `${a.routeId}|${headsign}`;
+      const g = groups.get(key);
+      if (g) g.minutes.push(a.minutes);
+      else groups.set(key, { routeId: a.routeId, headsign, minutes: [a.minutes] });
+    }
+  };
+  collect(station.northbound.arrivals, "Northbound");
+  collect(station.southbound.arrivals, "Southbound");
 
-  const header = `${esc(station.name)} \\emdash  ${station.walkMinutes} min walk`;
+  const rows = Array.from(groups.values())
+    .map((g) => ({ ...g, minutes: g.minutes.slice().sort((a, b) => a - b) }))
+    .sort((a, b) => a.minutes[0] - b.minutes[0]);
 
-  // tab stops: 1440 twips = 1" (route), 5040 twips = 3.5" (headsign), arrives after
-  const TAB_DEFS = "\\tx1440\\tx5040";
+  const uniqueRoutes = Array.from(new Set(rows.map((r) => r.routeId)));
+  const routePrefix = uniqueRoutes.length ? uniqueRoutes.join(", ") + " \\emdash  " : "";
+  const headerLine =
+    `${routePrefix}${esc(station.name)} \\emdash  ${station.walkMinutes} min walk`;
 
-  const rows = allArrivals.map((a) => {
-    const arrives = a.minutes === 0 ? "now" : `${a.minutes} min`;
-    return `\\pard ${TAB_DEFS} ${esc(a.routeId)}\\t${esc(a.headsign)}\\t${esc(arrives)}\\par`;
-  });
+  const fmtMin = (n: number) => (n === 0 ? "now" : `${n} min`);
+  const fmtRest = (xs: number[]) =>
+    xs.length === 0 ? "\\emdash " : xs.slice(0, 4).join(", ") + " min";
+
+  // Native RTF table — Quick Look (NSAttributedString) renders these.
+  // cellx is the cumulative right-edge in twips (1440 twips = 1 inch).
+  const C1 = 4400; // Headsign  (~3.0")
+  const C2 = 5800; // Next      (~1.0")
+  const C3 = 9200; // Then in   (~2.4")
+
+  const ruled = "\\clbrdrt\\brdrs\\brdrw15\\clbrdrb\\brdrs\\brdrw15";
+  const headerCells =
+    `${ruled}\\cellx${C1}${ruled}\\cellx${C2}${ruled}\\cellx${C3}`;
+  const dataCells = `\\cellx${C1}\\cellx${C2}\\cellx${C3}`;
+  const closeCells =
+    `\\clbrdrt\\brdrs\\brdrw15\\cellx${C1}` +
+    `\\clbrdrt\\brdrs\\brdrw15\\cellx${C2}` +
+    `\\clbrdrt\\brdrs\\brdrw15\\cellx${C3}`;
+
+  const tableHeader = [
+    `\\trowd\\trgaph108${headerCells}`,
+    `\\pard\\intbl\\b Headsign\\cell Next\\cell Then in\\cell\\b0\\row`,
+  ].join("\n");
+
+  const dataRows = rows.map((r) =>
+    [
+      `\\trowd\\trgaph108${dataCells}`,
+      `\\pard\\intbl ${esc(r.headsign)}\\cell ${fmtMin(r.minutes[0])}\\cell ${fmtRest(r.minutes.slice(1))}\\cell\\row`,
+    ].join("\n"),
+  );
+
+  // Empty border-only row to draw the bottom rule.
+  const tableFooter = [
+    `\\trowd\\trgaph108${closeCells}`,
+    `\\pard\\intbl\\cell\\cell\\cell\\row`,
+  ].join("\n");
+
+  const body = rows.length === 0
+    ? ["\\pard No arrivals available.\\par"]
+    : [tableHeader, ...dataRows, tableFooter];
 
   return [
     "{\\rtf1\\ansi\\deff0",
     "{\\fonttbl{\\f0\\fswiss\\fcharset0 Helvetica;}}",
-    "\\f0\\fs24",
-    `\\pard\\b ${header}\\b0\\par`,
+    "\\f0\\fs28",
+    `\\pard\\b ${headerLine}\\b0\\par`,
+    "\\pard\\fs24\\par",
+    ...body,
     "\\pard\\par",
-    `\\pard ${TAB_DEFS}\\b Route\\tHeadsign\\tArrives\\b0\\par`,
-    ...rows,
     "}",
   ].join("\n");
 }
