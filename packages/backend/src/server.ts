@@ -8,11 +8,14 @@ import { getArrivalsForStations } from "./feeds";
 import { getBusArrivalsForStops } from "./bus-feeds";
 import type { ArrivalsResponse, StationResult } from "./types";
 
-// ── RTF card builder ──────────────────────────────────────────────────────────
+// ── HTML card builder ─────────────────────────────────────────────────────────
 
-function buildRtf(station: StationResult): string {
+function buildHtml(station: StationResult): string {
   const esc = (s: string) =>
-    s.replace(/\\/g, "\\\\").replace(/\{/g, "\\{").replace(/\}/g, "\\}");
+    s.replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
 
   // Group arrivals by route + headsign so each row is a single destination.
   type Group = { routeId: string; headsign: string; minutes: number[] };
@@ -37,61 +40,50 @@ function buildRtf(station: StationResult): string {
     .sort((a, b) => a.minutes[0] - b.minutes[0]);
 
   const uniqueRoutes = Array.from(new Set(rows.map((r) => r.routeId)));
-  const routePrefix = uniqueRoutes.length ? uniqueRoutes.join(", ") + " \\emdash  " : "";
+  const routePrefix = uniqueRoutes.length ? uniqueRoutes.join(", ") + " — " : "";
   const headerLine =
-    `${routePrefix}${esc(station.name)} \\emdash  ${station.walkMinutes} min walk`;
+    `${routePrefix}${esc(station.name)} — ${station.walkMinutes} min walk`;
 
   const fmtMin = (n: number) => (n === 0 ? "now" : `${n} min`);
   const fmtRest = (xs: number[]) =>
-    xs.length === 0 ? "\\emdash " : xs.slice(0, 4).join(", ") + " min";
+    xs.length === 0 ? "—" : xs.slice(0, 4).join(", ") + " min";
 
-  // Native RTF table — Quick Look (NSAttributedString) renders these.
-  // cellx is the cumulative right-edge in twips (1440 twips = 1 inch).
-  const C1 = 4400; // Headsign  (~3.0")
-  const C2 = 5800; // Next      (~1.0")
-  const C3 = 9200; // Then in   (~2.4")
-
-  const ruled = "\\clbrdrt\\brdrs\\brdrw15\\clbrdrb\\brdrs\\brdrw15";
-  const headerCells =
-    `${ruled}\\cellx${C1}${ruled}\\cellx${C2}${ruled}\\cellx${C3}`;
-  const dataCells = `\\cellx${C1}\\cellx${C2}\\cellx${C3}`;
-  const closeCells =
-    `\\clbrdrt\\brdrs\\brdrw15\\cellx${C1}` +
-    `\\clbrdrt\\brdrs\\brdrw15\\cellx${C2}` +
-    `\\clbrdrt\\brdrs\\brdrw15\\cellx${C3}`;
-
-  const tableHeader = [
-    `\\trowd\\trgaph108${headerCells}`,
-    `\\pard\\intbl\\b Headsign\\cell Next\\cell Then in\\cell\\b0\\row`,
-  ].join("\n");
-
-  const dataRows = rows.map((r) =>
-    [
-      `\\trowd\\trgaph108${dataCells}`,
-      `\\pard\\intbl ${esc(r.headsign)}\\cell ${fmtMin(r.minutes[0])}\\cell ${fmtRest(r.minutes.slice(1))}\\cell\\row`,
-    ].join("\n"),
-  );
-
-  // Empty border-only row to draw the bottom rule.
-  const tableFooter = [
-    `\\trowd\\trgaph108${closeCells}`,
-    `\\pard\\intbl\\cell\\cell\\cell\\row`,
-  ].join("\n");
+  const trs = rows.map((r) =>
+    `      <tr><td>${esc(r.headsign)}</td><td>${fmtMin(r.minutes[0])}</td><td>${fmtRest(r.minutes.slice(1))}</td></tr>`,
+  ).join("\n");
 
   const body = rows.length === 0
-    ? ["\\pard No arrivals available.\\par"]
-    : [tableHeader, ...dataRows, tableFooter];
+    ? "    <p>No arrivals available.</p>"
+    : `    <table border="1" cellpadding="6" cellspacing="0">
+      <thead>
+        <tr><th>Headsign</th><th>Next</th><th>Then in</th></tr>
+      </thead>
+      <tbody>
+${trs}
+      </tbody>
+    </table>`;
 
-  return [
-    "{\\rtf1\\ansi\\deff0",
-    "{\\fonttbl{\\f0\\fswiss\\fcharset0 Helvetica;}}",
-    "\\f0\\fs28",
-    `\\pard\\b ${headerLine}\\b0\\par`,
-    "\\pard\\fs24\\par",
-    ...body,
-    "\\pard\\par",
-    "}",
-  ].join("\n");
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${esc(station.name)}</title>
+    <style>
+      body {
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        font: 15px/1.4 -apple-system, system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>${headerLine}</h2>
+${body}
+  </body>
+</html>
+`;
 }
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
@@ -211,12 +203,11 @@ app.get("/api/arrivals/card", async (req, res) => {
       };
     });
 
-    const rtf = buildRtf(stations[0]);
+    const html = buildHtml(stations[0]);
 
-    res.setHeader("Content-Type", "application/rtf");
-    res.setHeader("Content-Disposition", 'inline; filename="arrivals.rtf"');
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=25");
-    res.send(rtf);
+    res.send(html);
   } catch (err) {
     console.error("[server] /api/arrivals/card error:", err);
     res.status(500).send(

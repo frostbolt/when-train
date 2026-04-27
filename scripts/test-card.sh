@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Fetch /api/arrivals/card and preview it the way Finder Quick Look will render it.
+# Fetch /api/arrivals/card and preview it the way Quick Look / Apple Shortcuts will render it.
 #
 # Usage:
 #   scripts/test-card.sh                       # default coords (Bay Pkwy)
 #   scripts/test-card.sh <lat> <lng>           # custom coords
 #   scripts/test-card.sh bay-pkwy              # named preset
-#   scripts/test-card.sh --open                # open in TextEdit instead of Quick Look
+#   scripts/test-card.sh --browser             # open in default browser instead of Quick Look
+#   scripts/test-card.sh --raw                 # print HTML source to stdout
 #   HOST=https://staging.example scripts/test-card.sh   # override host
 
 set -euo pipefail
@@ -30,8 +31,8 @@ mode="quicklook"
 args=()
 for a in "$@"; do
   case "$a" in
-    --open) mode="textedit" ;;
-    --raw)  mode="raw" ;;
+    --browser) mode="browser" ;;
+    --raw)     mode="raw" ;;
     -h|--help)
       grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) args+=("$a") ;;
@@ -52,7 +53,7 @@ fi
 lat="${coords%,*}"
 lng="${coords#*,}"
 url="${HOST}/api/arrivals/card?lat=${lat}&lng=${lng}"
-out="$(mktemp -t arrivals-card.XXXXXX).rtf"
+out="$(mktemp -t arrivals-card.XXXXXX).html"
 
 echo "→ GET $url"
 http_code=$(curl -sS -o "$out" -w "%{http_code}" \
@@ -70,22 +71,22 @@ if [[ "$http_code" != "200" ]]; then
   exit 1
 fi
 
-# Sanity checks on the RTF body.
-if ! head -c 6 "$out" | grep -q '^{\\rtf'; then
-  echo "✗ response does not start with {\\rtf — not valid RTF" >&2
+# Sanity checks on the HTML body.
+if ! head -c 15 "$out" | grep -qi '^<!doctype html'; then
+  echo "✗ response does not start with <!DOCTYPE html — not valid HTML" >&2
   exit 1
 fi
-if ! grep -q '}$' "$out"; then
-  echo "✗ response does not end with } — RTF likely truncated" >&2
+if ! grep -qi '</html>' "$out"; then
+  echo "✗ response missing </html> — likely truncated" >&2
   exit 1
 fi
-echo "✓ looks like well-formed RTF"
+echo "✓ looks like well-formed HTML"
 
 case "$mode" in
-  raw)      cat "$out" ;;
-  textedit) open -a TextEdit "$out" ;;
+  raw)     cat "$out" ;;
+  browser) open "$out" ;;
   quicklook)
-    # qlmanage -p is what Finder uses for Quick Look. Closes when you ⌘-W.
+    # qlmanage -p uses WebKit for HTML — same renderer as iOS Quick Look. ⌘-W to close.
     echo "→ opening Quick Look preview (⌘-W to close)"
     qlmanage -p "$out" >/dev/null 2>&1 ;;
 esac
