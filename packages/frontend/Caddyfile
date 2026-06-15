@@ -1,0 +1,45 @@
+# whenTrain? frontend — static PWA + reverse proxy to the backend.
+#
+# SITE_ADDRESS controls TLS:
+#   • unset / ":80"            → plain HTTP on :80 (local `docker compose up`)
+#   • "whentrain.lushchik.com" → automatic HTTPS via Let's Encrypt on :443,
+#                                with an HTTP→HTTPS redirect on :80.
+# Certs are persisted in the caddy_data volume (see docker-compose.yml).
+
+{$SITE_ADDRESS::80} {
+	encode gzip
+
+	# ── API → backend ──────────────────────────────────────────────────────────
+	handle /api/* {
+		reverse_proxy backend:3001
+	}
+	handle /health {
+		reverse_proxy backend:3001
+	}
+
+	# ── Static PWA ───────────────────────────────────────────────────────────────
+	handle {
+		root * /srv
+
+		# Service worker, workbox chunks and the HTML shell must never be cached
+		# so a new deploy propagates immediately.
+		@nocache path_regexp ^/(index\.html|sw\.js|workbox-.+\.js)$
+		header @nocache Cache-Control "no-cache, no-store, must-revalidate"
+
+		# Hashed assets are immutable — cache them for a year. Exclude the
+		# never-cache files above so they don't inherit a long max-age.
+		@immutable {
+			path *.js *.css *.woff *.woff2
+			not path_regexp ^/(sw\.js|workbox-.+\.js)$
+		}
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		# PWA manifest must be served with this exact MIME type or browsers ignore it.
+		@manifest path /manifest.webmanifest
+		header @manifest Content-Type application/manifest+json
+
+		# SPA fallback — every non-asset route serves index.html.
+		try_files {path} /index.html
+		file_server
+	}
+}

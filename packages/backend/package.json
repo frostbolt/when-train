@@ -11,8 +11,7 @@
     "adm-zip": "^0.5.10",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "gtfs-realtime-bindings": "^1.0.0",
-    "ioredis": "^5.3.2"
+    "gtfs-realtime-bindings": "^1.0.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.5",

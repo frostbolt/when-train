@@ -1,5 +1,5 @@
 import * as GtfsRt from "gtfs-realtime-bindings";
-import type { Redis } from "ioredis";
+import { fetchBytesCached } from "./cache";
 import type { BusGtfsCache } from "./bus-gtfs";
 import type { ArrivalTime } from "./types";
 
@@ -9,28 +9,8 @@ const CACHE_TTL_SECS = 30;
 
 // ── Feed fetch ────────────────────────────────────────────────────────────────
 
-async function fetchBusFeed(
-  redis: Redis
-): Promise<GtfsRt.transit_realtime.FeedMessage> {
-  try {
-    const cached = await redis.getBuffer(CACHE_KEY);
-    if (cached) {
-      return GtfsRt.transit_realtime.FeedMessage.decode(new Uint8Array(cached));
-    }
-  } catch {
-    // Redis unavailable – fall through
-  }
-
-  const res = await fetch(BUS_RT_URL);
-  if (!res.ok) throw new Error(`Bus feed: HTTP ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-
-  try {
-    await redis.set(CACHE_KEY, buf, "EX", CACHE_TTL_SECS);
-  } catch {
-    // Redis unavailable
-  }
-
+async function fetchBusFeed(): Promise<GtfsRt.transit_realtime.FeedMessage> {
+  const buf = await fetchBytesCached(CACHE_KEY, BUS_RT_URL, CACHE_TTL_SECS);
   return GtfsRt.transit_realtime.FeedMessage.decode(new Uint8Array(buf));
 }
 
@@ -53,12 +33,11 @@ export interface BusStopArrivals {
 
 export async function getBusArrivalsForStops(
   stopIds: string[],
-  gtfs: BusGtfsCache,
-  redis: Redis
+  gtfs: BusGtfsCache
 ): Promise<Map<string, BusStopArrivals>> {
   let feed: GtfsRt.transit_realtime.FeedMessage;
   try {
-    feed = await fetchBusFeed(redis);
+    feed = await fetchBusFeed();
   } catch (err) {
     console.error("[bus-feeds]", err instanceof Error ? err.message : err);
     return new Map(stopIds.map((id) => [id, { dir0: [], dir1: [] }]));

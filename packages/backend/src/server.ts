@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import { Redis } from "ioredis";
 import { getGtfs } from "./gtfs";
 import { getBusGtfs, type BusStop } from "./bus-gtfs";
 import { stationsWithinWalk, haversineMeters } from "./geo";
@@ -87,21 +86,6 @@ ${body}
 }
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
-const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
-
-// ── Redis ─────────────────────────────────────────────────────────────────────
-
-const redis = new Redis(REDIS_URL, {
-  lazyConnect: true,
-  enableOfflineQueue: false,
-  maxRetriesPerRequest: 1,
-  retryStrategy: (times) => (times > 3 ? null : Math.min(times * 500, 2000)),
-});
-
-let redisOk = false;
-redis.on("connect", () => { redisOk = true; console.log("[redis] connected"); });
-redis.on("error", (e) => { if (redisOk || !e.message.includes("ECONNREFUSED")) console.warn("[redis]", e.message); });
-redis.connect().catch(() => {/* handled by error event */});
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
@@ -133,8 +117,7 @@ app.get("/api/arrivals", async (req, res) => {
     const nearest = stationsWithinWalk(lat, lng, gtfs.stations, 15);
     const arrivals = await getArrivalsForStations(
       nearest.map((s) => s.id),
-      gtfs,
-      redis
+      gtfs
     );
 
     const stations: StationResult[] = nearest.map((s) => {
@@ -188,8 +171,7 @@ app.get("/api/arrivals/card", async (req, res) => {
 
     const arrivals = await getArrivalsForStations(
       nearest.map((s) => s.id),
-      gtfs,
-      redis
+      gtfs
     );
 
     const stations: StationResult[] = nearest.map((s) => {
@@ -284,7 +266,7 @@ app.get("/api/bus-arrivals", async (req, res) => {
 
     // Collect all stop IDs across all clusters
     const allStopIds = clusters.flatMap((c) => c.allIds);
-    const arrivalsMap = await getBusArrivalsForStops(allStopIds, gtfs, redis);
+    const arrivalsMap = await getBusArrivalsForStops(allStopIds, gtfs);
 
     const stations: StationResult[] = clusters.map((cluster) => {
       // Merge arrivals from all stop IDs in this cluster

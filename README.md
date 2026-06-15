@@ -17,9 +17,9 @@ Real-time NYC subway arrival times for all stations within a 15-minute walk of y
 | Frontend | Lit 3 web components, Vite, vite-plugin-pwa |
 | Backend | Node.js + Express, TypeScript |
 | Data | MTA GTFS static (stops, trips) + GTFS-RT protobuf feeds |
-| Cache | Redis — raw feed bytes cached 30 s per feed endpoint |
-| Infra | Docker Compose, nginx (reverse proxy + static files) |
-| Deploy | Coolify on DigitalOcean, HTTPS via Let's Encrypt |
+| Cache | In-process TTL cache — raw feed bytes cached 30 s per feed endpoint |
+| Infra | Docker Compose, Caddy (reverse proxy + static files + auto-HTTPS) |
+| Deploy | Compute Engine `e2-micro` (GCP free tier) — see [DEPLOY.md](DEPLOY.md) |
 
 ## Running locally
 
@@ -33,7 +33,7 @@ Open [http://localhost](http://localhost). The backend downloads the MTA GTFS st
 
 ```
 packages/
-  backend/   Express API — GTFS parsing, feed fetching, Redis cache
+  backend/   Express API — GTFS parsing, feed fetching, in-process cache
   frontend/  Lit PWA — station cards, geolocation, auto-refresh
 ```
 

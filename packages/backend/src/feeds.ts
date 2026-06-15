@@ -1,5 +1,5 @@
 import * as GtfsRt from "gtfs-realtime-bindings";
-import type { Redis } from "ioredis";
+import { fetchBytesCached } from "./cache";
 import type { GtfsCache } from "./gtfs";
 import type { ArrivalTime } from "./types";
 
@@ -23,38 +23,16 @@ export function feedForStopId(stopId: string): string {
   return "gtfs-nqrw";
 }
 
-// ── Redis-cached feed fetch ───────────────────────────────────────────────────
+// ── Cached feed fetch ─────────────────────────────────────────────────────────
 
 async function fetchFeedWithCache(
-  feedName: string,
-  redis: Redis
+  feedName: string
 ): Promise<GtfsRt.transit_realtime.FeedMessage> {
-  const key = `feed:${feedName}`;
-
-  // Try cache first
-  try {
-    const cached = await redis.getBuffer(key);
-    if (cached) {
-      return GtfsRt.transit_realtime.FeedMessage.decode(
-        new Uint8Array(cached)
-      );
-    }
-  } catch {
-    // Redis unavailable – fall through
-  }
-
-  // Fetch from MTA
-  const res = await fetch(`${MTA_BASE}${feedName}`);
-  if (!res.ok) throw new Error(`Feed ${feedName}: HTTP ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-
-  // Cache raw protobuf bytes
-  try {
-    await redis.set(key, buf, "EX", CACHE_TTL_SECS);
-  } catch {
-    // Redis unavailable – continue without caching
-  }
-
+  const buf = await fetchBytesCached(
+    `feed:${feedName}`,
+    `${MTA_BASE}${feedName}`,
+    CACHE_TTL_SECS
+  );
   return GtfsRt.transit_realtime.FeedMessage.decode(new Uint8Array(buf));
 }
 
@@ -113,8 +91,7 @@ export interface StationArrivals {
 
 export async function getStationArrivals(
   stationId: string,
-  gtfs: GtfsCache,
-  redis: Redis
+  gtfs: GtfsCache
 ): Promise<StationArrivals> {
   const children = gtfs.parentToChildren.get(stationId) ?? [];
   if (children.length === 0) return { northbound: [], southbound: [] };
@@ -124,7 +101,7 @@ export async function getStationArrivals(
 
   let feed: GtfsRt.transit_realtime.FeedMessage;
   try {
-    feed = await fetchFeedWithCache(feedName, redis);
+    feed = await fetchFeedWithCache(feedName);
   } catch (err) {
     console.error(`[feeds] ${feedName}:`, err instanceof Error ? err.message : err);
     return { northbound: [], southbound: [] };
@@ -151,8 +128,7 @@ export async function getStationArrivals(
 /** Fetch arrivals for multiple stations concurrently, deduplicating feed calls. */
 export async function getArrivalsForStations(
   stationIds: string[],
-  gtfs: GtfsCache,
-  redis: Redis
+  gtfs: GtfsCache
 ): Promise<Map<string, StationArrivals>> {
   // Deduplicate feeds needed
   const feedToStations = new Map<string, string[]>();
@@ -167,7 +143,7 @@ export async function getArrivalsForStations(
   await Promise.all(
     Array.from(feedToStations.keys()).map(async (feedName) => {
       try {
-        feedMessages.set(feedName, await fetchFeedWithCache(feedName, redis));
+        feedMessages.set(feedName, await fetchFeedWithCache(feedName));
       } catch (err) {
         console.error(
           `[feeds] ${feedName}:`,
