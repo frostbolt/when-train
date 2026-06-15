@@ -2,6 +2,11 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  // Injected at build time from the APP_VERSION build arg (the git short hash
+  // on the deploy host); falls back to "dev" for local builds.
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.APP_VERSION || "dev"),
+  },
   plugins: [
     VitePWA({
       registerType: "autoUpdate",

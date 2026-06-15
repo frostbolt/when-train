@@ -6,6 +6,7 @@ import "./station-section.js";
 
 const REFRESH_SECS = 30;
 const FEATURE_BUSES = import.meta.env.VITE_FEATURE_BUSES === "true";
+const APP_VERSION = __APP_VERSION__;
 
 type Tab = "trains" | "buses";
 
@@ -90,6 +91,11 @@ export class WhenTrainApp extends LitElement {
       justify-content: space-between;
       font-size: 12px;
       color: #6e6e73;
+    }
+    .version {
+      margin-left: 6px;
+      opacity: 0.55;
+      font-variant-numeric: tabular-nums;
     }
     .dot {
       display: inline-block;
@@ -281,7 +287,7 @@ export class WhenTrainApp extends LitElement {
       ` : ""}
       ${this.renderContent()}
       <div class="footer">
-        <span><span class="dot"></span>${this.updatedAt}</span>
+        <span><span class="dot"></span>${this.updatedAt}<span class="version">v${APP_VERSION}</span></span>
         <span>↻ ${this.countdown}s</span>
       </div>
     `;

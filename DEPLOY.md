@@ -81,8 +81,12 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```bash
 git clone https://github.com/<you>/when-train.git && cd when-train
 cp .env.example .env          # SITE_ADDRESS is already set to the domain
-docker compose up -d --build
+APP_VERSION=$(git rev-parse --short HEAD) docker compose up -d --build
 ```
+
+`APP_VERSION` is the git short hash; it's baked into the frontend bundle and shown
+next to the "last updated" time in the UI, so you can tell at a glance which build
+is live. Omit it and the version reads `dev`.
 
 Caddy fetches the certificate on first boot (a few seconds once DNS is live).
 The backend downloads MTA GTFS static data on first start (~10 s) before `/health`
@@ -99,7 +103,7 @@ curl -sI https://whentrain.lushchik.com/ | head -1     # HTTP/2 200
 
 ```bash
 docker compose logs -f backend     # tail backend logs
-docker compose pull && docker compose up -d --build   # redeploy after a git pull
+git pull && APP_VERSION=$(git rev-parse --short HEAD) docker compose up -d --build   # redeploy
 docker compose down                # stop (keeps the caddy_data cert volume)
 ```
 

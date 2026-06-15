@@ -6,6 +6,9 @@ RUN npm ci --include=dev
 COPY tsconfig.json vite.config.ts vite-env.d.ts index.html ./
 COPY src ./src
 COPY public ./public
+# Build version (git short hash on the deploy host); baked into the bundle.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 RUN npm run build
 
 # ── Serve ─────────────────────────────────────────────────────────────────────
