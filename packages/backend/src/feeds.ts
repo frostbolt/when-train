@@ -12,7 +12,7 @@ const CACHE_TTL_SECS = 30;
 
 export function feedForStopId(stopId: string): string {
   const c = stopId[0] ?? "";
-  if ("123456789".includes(c)) return "gtfs-1234567";
+  if ("123456789".includes(c)) return "gtfs";  // MTA's combined numbered-lines feed
   if ("ACE H".includes(c)) return "gtfs-ace";          // H = Rockaway shuttle
   if ("BDFM".includes(c)) return "gtfs-bdfm";
   if (c === "G") return "gtfs-g";
