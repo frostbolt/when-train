@@ -16,6 +16,19 @@ The stack is two containers:
 > container. If you see OOM kills under load, resize to `e2-small` (2 GB, ~$13/mo) —
 > no other change needed.
 
+## 0. Create the project (one-time)
+
+```bash
+gcloud projects create whentrain-lushchik --name="whenTrain"
+gcloud billing projects link whentrain-lushchik --billing-account=<BILLING_ACCOUNT_ID>
+gcloud config set project whentrain-lushchik
+gcloud services enable compute.googleapis.com
+```
+
+Billing must be linked even for the free tier — the e2-micro is only free while a
+valid billing account is attached. List your billing accounts with
+`gcloud billing accounts list`.
+
 ## 1. Create the VM
 
 ```bash
